@@ -1,0 +1,23 @@
+# Virtual environments
+.venv/
+.venv311/
+
+# Scraped data (large files — keep locally)
+ebay_items_full.json
+ebay_items_backup.csv
+ebay_clothing_products.json
+ebay_clothing_products.csv
+ebay_clothing_products_old.json
+ebay_page.html
+
+# Progress tracking
+item_scraper_progress.json
+scraper_progress.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# VS Code
+.vscode/
