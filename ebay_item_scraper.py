@@ -194,20 +194,21 @@ def parse_item_page(html, url, category_name):
     """
     soup = BeautifulSoup(html, "html.parser")
     data = {
-        "item_id"           : "",
-        "product_name"      : "",
-        "category"          : category_name,
-        "price"             : "",
-        "original_price"    : "",
-        "condition"         : "",
-        "item_specifics"    : {},
-        "seller_description": "",
-        "seller_name"       : "",
-        "seller_feedback"   : "",
-        "seller_location"   : "",
-        "image_urls"        : [],
-        "product_url"       : url,
-        "scraped_at"        : datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "item_id"                 : "",
+        "product_name"            : "",
+        "category"                : category_name,
+        "price"                   : "",
+        "original_price"          : "",
+        "condition"               : "",
+        "item_specifics"          : {},
+        "seller_description"      : "",
+        "seller_name"             : "",
+        "seller_feedback"         : "",
+        "seller_feedback_percent" : "",
+        "seller_location"         : "",
+        "image_urls"              : [],
+        "product_url"             : url,
+        "scraped_at"              : datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
     # ── JSON-LD structured data (reliable fallback for price/condition/name) ──
@@ -397,7 +398,7 @@ def parse_item_page(html, url, category_name):
             data["seller_name"] = el.get_text(strip=True)
             break
 
-    # Seller feedback score / percentage
+    # Seller feedback score (total count)
     for sel in [
         "span[data-testid='ux-seller-section__item--seller-feedback']",
         "span.mbg-l",
@@ -406,8 +407,33 @@ def parse_item_page(html, url, category_name):
     ]:
         el = soup.select_one(sel)
         if el:
-            data["seller_feedback"] = el.get_text(strip=True)
+            txt = el.get_text(strip=True)
+            # Clean brackets — store as plain number e.g. 1089956
+            clean = re.sub(r'[(),\s]', '', txt)
+            data["seller_feedback"] = clean if clean.isdigit() else txt
             break
+
+    # Seller positive feedback percentage
+    # Primary: span.ux-textspans--PSEUDOLINK containing "% positive"
+    for el in soup.select("span.ux-textspans--PSEUDOLINK"):
+        txt = el.get_text(strip=True)
+        if "%" in txt and "positive" in txt.lower():
+            data["seller_feedback_percent"] = txt
+            break
+
+    # Fallback: x-store-information highlights
+    if not data["seller_feedback_percent"]:
+        for el in soup.select("p.x-store-information__highlights span.ux-textspans"):
+            txt = el.get_text(strip=True)
+            if "%" in txt and "positive" in txt.lower():
+                data["seller_feedback_percent"] = txt
+                break
+
+    # Fallback: regex from raw HTML
+    if not data["seller_feedback_percent"]:
+        m = re.search(r'([\d.]+%\s*positive(?:\s*feedback)?)', html, re.IGNORECASE)
+        if m:
+            data["seller_feedback_percent"] = m.group(1).strip()
 
     # Seller location / item location
     # Primary: look for "Located in:" text in SECONDARY spans
@@ -538,25 +564,48 @@ def save_progress(p):
         json.dump(p, f, indent=2)
 
 
+JSONL_FILE = CONFIG["output_json"].replace(".json", ".jsonl")
+
+
 def load_existing():
-    path = CONFIG["output_json"]
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    return []
+    """Load all items from JSONL file into a list."""
+    path = JSONL_FILE
+    if not os.path.exists(path):
+        return []
+    items = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    items.append(json.loads(line))
+                except Exception:
+                    pass
+    return items
 
 
 def save_item(item):
-    path = CONFIG["output_json"]
-    data = load_existing()
-    # Replace if already exists, otherwise append
-    idx = next((i for i, x in enumerate(data) if x.get("item_id") == item.get("item_id")), None)
-    if idx is not None:
-        data[idx] = item
-    else:
-        data.append(item)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    """
+    Instantly append item as a single JSON line.
+    If item already exists (same item_id), rewrite the file to update it.
+    """
+    path = JSONL_FILE
+    item_id = item.get("item_id", "")
+
+    # Check if item already exists — if so, rewrite to update
+    if item_id and os.path.exists(path):
+        data = load_existing()
+        idx = next((i for i, x in enumerate(data) if x.get("item_id") == item_id), None)
+        if idx is not None:
+            data[idx] = item
+            with open(path, "w", encoding="utf-8") as f:
+                for row in data:
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            return
+
+    # New item — just append one line instantly
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
 def scrape_category(driver, cat_name, cat_id_or_url, scraped_ids, progress, start_page=1):
@@ -648,7 +697,8 @@ def scrape_category(driver, cat_name, cat_id_or_url, scraped_ids, progress, star
 
                 print(f"        ✓ {item_data['product_name'][:55]}")
                 print(f"          Price: {item_data['price']}  |  Condition: {item_data['condition']}")
-                print(f"          Seller: {item_data['seller_name']}  |  Location: {item_data['seller_location']}")
+                print(f"          Seller: {item_data['seller_name']}  |  Feedback: {item_data['seller_feedback']}  {item_data['seller_feedback_percent']}")
+                print(f"          Location: {item_data['seller_location']}")
                 print(f"          Specifics: {len(item_data['item_specifics'])} fields  |  Images: {len(item_data['image_urls'])}")
 
                 save_item(item_data)
