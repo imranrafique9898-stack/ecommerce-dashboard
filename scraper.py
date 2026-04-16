@@ -316,8 +316,11 @@ def save_item(item):
         data[idx] = item
     else:
         data.append(item)
-    with open(CONFIG["output_json"], "w", encoding="utf-8") as f:
+    # Write to temp file first then rename — prevents corruption on crash
+    tmp = CONFIG["output_json"] + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, CONFIG["output_json"])
 
 
 # ═══════════════════════════════════════════════════════════════
