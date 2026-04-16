@@ -328,25 +328,28 @@
   }
 
   function addProducts(results) {
+    if (!results || !results.length) return;
     const row = document.createElement("div");
     row.className = "products-row";
     results.forEach(p => {
       const card = document.createElement("div");
       card.className = "product-card";
+      const imgHtml = p.image_url
+        ? `<img src="${p.image_url}" alt="${esc(p.product_name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        : "";
+      const noImg = `<div class="no-img" ${p.image_url ? 'style="display:none"' : ""}>🛍️</div>`;
+      const rating = p.seller_feedback_percent
+        ? `<div class="product-rating">⭐ ${esc(p.seller_feedback_percent)}</div>` : "";
       card.innerHTML = `
-        ${p.image_url
-          ? `<img src="${esc(p.image_url)}" alt="${esc(p.product_name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-          : ""}
-        <div class="no-img" ${p.image_url ? 'style="display:none"' : ""}>🛍️</div>
+        ${imgHtml}
+        ${noImg}
         <div class="product-info">
           <div class="product-name">${esc(p.product_name)}</div>
           <div class="product-price">${esc(p.price)}</div>
           <div class="product-cond">${esc(p.condition)}</div>
-          ${p.seller_feedback_percent
-            ? `<div class="product-rating">⭐ ${esc(p.seller_feedback_percent)}</div>`
-            : ""}
+          ${rating}
         </div>
-        <a class="buy-btn" href="${esc(p.product_url)}" target="_blank">🛒 Buy Now</a>`;
+        <a class="buy-btn" href="${p.product_url}" target="_blank" rel="noopener">🛒 Shop Now</a>`;
       row.appendChild(card);
     });
     chatBody.appendChild(row);
