@@ -353,6 +353,8 @@
     scrollBottom();
   }
 
+  let chatHistory = [];
+
   async function doSearch() {
     const input = document.getElementById("queryInput");
     const query = input.value.trim();
@@ -362,11 +364,13 @@
     addUserBubble(query);
     addTyping();
 
+    chatHistory.push({role: "user", content: query});
+
     try {
-      const res  = await fetch("/search", {
+      const res  = await fetch("/chat", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({query})
+        body: JSON.stringify({message: query, history: chatHistory.slice(-6)})
       });
       const data = await res.json();
       removeTyping();
@@ -376,12 +380,11 @@
         return;
       }
 
-      addBotBubble(esc(data.summary));
+      addBotBubble(esc(data.reply));
+      chatHistory.push({role: "assistant", content: data.reply});
 
-      if (data.results && data.results.length) {
-        addProducts(data.results);
-      } else {
-        addBotBubble("I couldn't find any products for that. Try a different search! 🔍");
+      if (data.products && data.products.length) {
+        addProducts(data.products);
       }
 
     } catch(e) {

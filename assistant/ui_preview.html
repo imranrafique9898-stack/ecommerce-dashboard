@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ShopBot — AI Shopping Assistant</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #2b2dce 0%, #a855f7 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .chat-window {
+      width: 420px;
+      max-height: 92vh;
+      background: #fff;
+      border-radius: 22px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.35);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* HEADER */
+    .chat-header {
+      background: linear-gradient(135deg, #6d28d9, #a855f7);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: white;
+    }
+    .bot-avatar {
+      width: 46px; height: 46px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; flex-shrink: 0;
+    }
+    .bot-info h2  { font-size: 1rem; font-weight: 700; }
+    .bot-status   { font-size: 0.78rem; opacity: 0.9; display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+    .dot          { width: 7px; height: 7px; background: #4ade80; border-radius: 50%; }
+    .header-right { margin-left: auto; font-size: 1.3rem; opacity: 0.7; cursor: pointer; letter-spacing: 2px; }
+
+    /* MESSAGES */
+    .chat-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      background: #f8f7ff;
+    }
+    .chat-body::-webkit-scrollbar { width: 4px; }
+    .chat-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+    .msg-row        { display: flex; gap: 10px; align-items: flex-start; }
+    .msg-row.user   { flex-direction: row-reverse; }
+
+    .msg-avatar {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, #6d28d9, #a855f7);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; color: white; flex-shrink: 0;
+    }
+
+    .msg-content  { display: flex; flex-direction: column; gap: 3px; max-width: 78%; }
+    .msg-label    { font-size: 0.7rem; color: #aaa; padding-left: 4px; }
+
+    .bubble {
+      padding: 11px 15px;
+      border-radius: 18px;
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+    .bubble.bot {
+      background: white;
+      color: #222;
+      border-top-left-radius: 4px;
+      box-shadow: 0 2px 10px rgba(109,40,217,0.1);
+    }
+    .bubble.user {
+      background: linear-gradient(135deg, #6d28d9, #a855f7);
+      color: white;
+      border-top-right-radius: 4px;
+      align-self: flex-end;
+    }
+
+    /* CHIPS */
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 44px; }
+    .chip {
+      padding: 7px 16px;
+      border: 1.5px solid #a855f7;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      color: #6d28d9;
+      cursor: pointer;
+      background: white;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .chip:hover { background: #6d28d9; color: white; border-color: #6d28d9; }
+
+    /* TYPING */
+    .typing { display: flex; gap: 5px; align-items: center; }
+    .typing span {
+      width: 8px; height: 8px;
+      background: #a855f7; border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%,60%,100% { transform: translateY(0); }
+      30%          { transform: translateY(-7px); }
+    }
+
+    /* PRODUCT CARDS */
+    .products-row {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 4px 0 6px 44px;
+      scrollbar-width: thin;
+    }
+    .products-row::-webkit-scrollbar { height: 4px; }
+    .products-row::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+    .product-card {
+      min-width: 155px; max-width: 155px;
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 3px 14px rgba(109,40,217,0.12);
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .product-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(109,40,217,0.2);
+    }
+    .product-card img {
+      width: 100%; height: 115px;
+      object-fit: cover; background: #f0f0f0;
+    }
+    .no-img {
+      width: 100%; height: 115px;
+      background: #f3f0ff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem; color: #c4b5fd;
+    }
+    .product-info { padding: 8px 10px; flex: 1; }
+    .product-name {
+      font-size: 0.73rem; font-weight: 600; color: #222;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+      line-height: 1.3; margin-bottom: 5px;
+    }
+    .product-price  { font-size: 0.95rem; font-weight: 700; color: #6d28d9; }
+    .product-cond   { font-size: 0.67rem; color: #888; margin-top: 2px; }
+    .product-rating { font-size: 0.67rem; color: #f59e0b; margin-top: 2px; font-weight: 600; }
+
+    .buy-btn {
+      display: block;
+      margin: 0 10px 10px;
+      padding: 8px;
+      background: linear-gradient(135deg, #6d28d9, #a855f7);
+      color: white;
+      text-align: center;
+      border-radius: 9px;
+      text-decoration: none;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      transition: opacity 0.2s;
+    }
+    .buy-btn:hover { opacity: 0.85; }
+
+    /* INPUT */
+    .chat-footer {
+      padding: 12px 16px;
+      border-top: 1px solid #ede9fe;
+      background: white;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .chat-footer input {
+      flex: 1; border: none; outline: none;
+      font-size: 0.88rem; color: #333; background: transparent;
+    }
+    .chat-footer input::placeholder { color: #bbb; }
+
+    .send-btn, .voice-btn {
+      width: 38px; height: 38px;
+      border: none; border-radius: 50%;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; transition: all 0.2s;
+    }
+    .send-btn  { background: linear-gradient(135deg, #6d28d9, #a855f7); color: white; }
+    .send-btn:hover { opacity: 0.85; }
+    .voice-btn { background: #ede9fe; color: #6d28d9; }
+    .voice-btn.listening { background: #ef4444; color: white; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+    .footer-brand {
+      font-size: 0.68rem; color: #ccc;
+      text-align: center; padding: 6px 0 8px;
+      background: white;
+    }
+    .footer-brand span { color: #a855f7; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<div class="chat-window">
+
+  <!-- Header -->
+  <div class="chat-header">
+    <div class="bot-avatar">🛍️</div>
+    <div class="bot-info">
+      <h2>ShopBot</h2>
+      <div class="bot-status"><span class="dot"></span> Online Now</div>
+    </div>
+    <div class="header-right">···</div>
+  </div>
+
+  <!-- Messages -->
+  <div class="chat-body" id="chatBody">
+
+    <!-- Welcome -->
+    <div class="msg-row">
+      <div class="msg-avatar">🛍️</div>
+      <div class="msg-content">
+        <div class="msg-label">ShopBot</div>
+        <div class="bubble bot">
+          Hi! 👋 I'm your AI Shopping Assistant.<br>
+          Ask me anything like:<br>
+          <em>"red mens jacket under $50"</em><br>
+          <em>"vintage dress new with tags"</em>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick chips -->
+    <div class="chips">
+      <div class="chip" onclick="sendChip(this)">👗 Womens Dresses</div>
+      <div class="chip" onclick="sendChip(this)">👟 Mens Sneakers</div>
+      <div class="chip" onclick="sendChip(this)">👜 Handbags</div>
+      <div class="chip" onclick="sendChip(this)">⌚ Watches</div>
+    </div>
+
+  </div>
+
+  <!-- Input bar -->
+  <div class="chat-footer">
+    <input type="text" id="queryInput" placeholder="Reply to ShopBot..."/>
+    <button class="voice-btn" id="voiceBtn" onclick="doVoice()" title="Voice search">🎤</button>
+    <button class="send-btn" onclick="doSearch()">➤</button>
+  </div>
+
+  <div class="footer-brand">Powered by ⚡ <span>ShopBot AI</span></div>
+</div>
+
+<script>
+  const chatBody = document.getElementById("chatBody");
+
+  document.getElementById("queryInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") doSearch();
+  });
+
+  function sendChip(el) {
+    document.getElementById("queryInput").value = el.textContent.replace(/^[^\w]+/, "").trim();
+    doSearch();
+  }
+
+  function scrollBottom() {
+    setTimeout(() => chatBody.scrollTop = chatBody.scrollHeight, 50);
+  }
+
+  function addUserBubble(text) {
+    const row = document.createElement("div");
+    row.className = "msg-row user";
+    row.innerHTML = `<div class="msg-content"><div class="bubble user">${esc(text)}</div></div>`;
+    chatBody.appendChild(row);
+    scrollBottom();
+  }
+
+  function addBotBubble(html, label="ShopBot") {
+    const row = document.createElement("div");
+    row.className = "msg-row";
+    row.innerHTML = `
+      <div class="msg-avatar">🛍️</div>
+      <div class="msg-content">
+        <div class="msg-label">${label}</div>
+        <div class="bubble bot">${html}</div>
+      </div>`;
+    chatBody.appendChild(row);
+    scrollBottom();
+    return row;
+  }
+
+  function addTyping() {
+    const row = document.createElement("div");
+    row.className = "msg-row"; row.id = "typingRow";
+    row.innerHTML = `
+      <div class="msg-avatar">🛍️</div>
+      <div class="msg-content">
+        <div class="bubble bot" style="padding:12px 16px">
+          <div class="typing"><span></span><span></span><span></span></div>
+        </div>
+      </div>`;
+    chatBody.appendChild(row);
+    scrollBottom();
+  }
+
+  function removeTyping() {
+    const t = document.getElementById("typingRow");
+    if (t) t.remove();
+  }
+
+  function addProducts(results) {
+    const row = document.createElement("div");
+    row.className = "products-row";
+    results.forEach(p => {
+      const card = document.createElement("div");
+      card.className = "product-card";
+      card.innerHTML = `
+        ${p.image_url
+          ? `<img src="${esc(p.image_url)}" alt="${esc(p.product_name)}"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : ""}
+        <div class="no-img" ${p.image_url ? 'style="display:none"' : ""}>🛍️</div>
+        <div class="product-info">
+          <div class="product-name">${esc(p.product_name)}</div>
+          <div class="product-price">${esc(p.price)}</div>
+          <div class="product-cond">${esc(p.condition)}</div>
+          ${p.seller_feedback_percent
+            ? `<div class="product-rating">⭐ ${esc(p.seller_feedback_percent)}</div>`
+            : ""}
+        </div>
+        <a class="buy-btn" href="${esc(p.product_url)}" target="_blank">🛒 Buy Now</a>`;
+      row.appendChild(card);
+    });
+    chatBody.appendChild(row);
+    scrollBottom();
+  }
+
+  async function doSearch() {
+    const input = document.getElementById("queryInput");
+    const query = input.value.trim();
+    if (!query) return;
+    input.value = "";
+
+    addUserBubble(query);
+    addTyping();
+
+    try {
+      const res  = await fetch("/search", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({query})
+      });
+      const data = await res.json();
+      removeTyping();
+
+      if (data.error) { addBotBubble("Sorry, something went wrong. Please try again."); return; }
+
+      addBotBubble(esc(data.summary));
+      if (data.results && data.results.length) {
+        addProducts(data.results);
+      } else {
+        addBotBubble("No products found. Try a different search! 🔍");
+      }
+    } catch(e) {
+      removeTyping();
+      addBotBubble("⚠️ Server not connected. Run: <code>python assistant/app.py</code>");
+    }
+  }
+
+  async function doVoice() {
+    const btn = document.getElementById("voiceBtn");
+    btn.classList.add("listening"); btn.textContent = "🔴";
+    addBotBubble("🎤 Listening... speak now!");
+    try {
+      const res  = await fetch("/voice", {method: "POST"});
+      const data = await res.json();
+      if (data.text) {
+        document.getElementById("queryInput").value = data.text;
+        doSearch();
+      } else {
+        addBotBubble("Couldn't hear that. Please try again. 🎤");
+      }
+    } catch(e) {
+      addBotBubble("Voice input failed. Please type your query.");
+    } finally {
+      btn.classList.remove("listening"); btn.textContent = "🎤";
+    }
+  }
+
+  function esc(s) {
+    return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                        .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+</script>
+</body>
+</html>

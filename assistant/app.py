@@ -1,41 +1,59 @@
 """
-app.py — Flask web app for the AI Shopping Assistant.
+app.py — Flask web app for the AI Shopping Chatbot.
 Run: python assistant/app.py
-Then open: http://localhost:5000
+Open: http://localhost:5000
 """
 
-from flask import Flask, render_template, request, jsonify
-from search_engine import search, summarize_results
+from flask import Flask, render_template, request, jsonify, session
+from search_engine import search, summarize
+from chatbot import chat, extract_search_query, is_product_query
 from voice_agent import listen, speak, is_microphone_available
+import uuid
 
 app = Flask(__name__)
+app.secret_key = "shopbot-secret-key-2024"
 
 
 @app.route("/")
 def index():
-    mic_available = is_microphone_available()
-    return render_template("index.html", mic_available=mic_available)
+    if "session_id" not in session:
+        session["session_id"] = str(uuid.uuid4())
+    return render_template("index.html", mic_available=is_microphone_available())
 
 
-@app.route("/search", methods=["POST"])
-def search_products():
-    data  = request.get_json()
-    query = (data.get("query") or "").strip()
-    if not query:
-        return jsonify({"error": "Empty query"}), 400
+@app.route("/chat", methods=["POST"])
+def chat_endpoint():
+    data    = request.get_json()
+    message = (data.get("message") or "").strip()
+    history = data.get("history", [])   # [{role, content}, ...]
 
-    results = search(query, top_k=12)
-    summary = summarize_results(query, results)
+    if not message:
+        return jsonify({"error": "Empty message"}), 400
 
-    # Speak the summary
-    speak(summary)
+    products = []
+    search_query = ""
 
-    return jsonify({"query": query, "summary": summary, "results": results})
+    # Decide if we should search for products
+    if is_product_query(message):
+        # Extract clean search query using LLM
+        search_query = extract_search_query(message, history)
+        products     = search(search_query, top_k=8)
+
+    # Generate conversational reply
+    reply = chat(message, history, products_found=len(products))
+
+    # Speak the reply
+    speak(reply)
+
+    return jsonify({
+        "reply"        : reply,
+        "products"     : products,
+        "search_query" : search_query,
+    })
 
 
 @app.route("/voice", methods=["POST"])
 def voice_input():
-    """Listen from microphone and return transcribed text."""
     text, error = listen(timeout=6, phrase_limit=10)
     if error:
         return jsonify({"error": error}), 400
@@ -44,7 +62,15 @@ def voice_input():
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("  AI Shopping Assistant")
+    print("  ShopBot — AI Shopping Chatbot")
     print("  Open: http://localhost:5000")
     print("=" * 50)
+    # Pre-load models on startup
+    from search_engine import _load as load_search
+    from chatbot import _load as load_chat
+    print("Pre-loading search engine...")
+    load_search()
+    print("Pre-loading chatbot model...")
+    load_chat()
+    print("All models ready. Starting server...")
     app.run(debug=False, port=5000)
