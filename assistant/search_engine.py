@@ -83,6 +83,15 @@ def _build_chunk(p):
         if k not in priority_keys and v and len(str(v)) < 60:
             parts.append(f"{k}: {v}")
 
+    # Seller description — clean and truncate to most useful part
+    desc = p.get("seller_description", "").strip()
+    if desc:
+        # Remove repetitive spec lines already captured above
+        desc_lines = [l.strip() for l in desc.splitlines() if len(l.strip()) > 20]
+        desc_clean = " ".join(desc_lines[:8])  # first 8 meaningful lines
+        if desc_clean:
+            parts.append(desc_clean[:400])  # cap at 400 chars
+
     # Seller info
     seller = p.get("seller_name", "").strip()
     if seller:
