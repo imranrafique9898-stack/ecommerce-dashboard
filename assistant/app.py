@@ -23,6 +23,8 @@ from voice_agent import listen, speak, is_microphone_available
 app = FastAPI(title="ShopBot AI", description="AI Shopping Chatbot API", version="1.0.0")
 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+# Disable template caching so changes reflect immediately
+templates.env.auto_reload = True
 
 
 # ── SCHEMAS ───────────────────────────────────────────────────────────────────
@@ -41,10 +43,13 @@ class SearchRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {
+    from fastapi.responses import Response
+    content = templates.TemplateResponse("index.html", {
         "request"      : request,
         "mic_available": is_microphone_available(),
     })
+    content.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return content
 
 
 @app.post("/chat")

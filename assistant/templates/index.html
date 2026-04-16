@@ -386,7 +386,8 @@
       addBotBubble(esc(data.reply));
       chatHistory.push({role: "assistant", content: data.reply});
 
-      if (data.products && data.products.length) {
+      console.log("Products received:", data.products ? data.products.length : 0);
+      if (data.products && data.products.length > 0) {
         addProducts(data.products);
       }
 
