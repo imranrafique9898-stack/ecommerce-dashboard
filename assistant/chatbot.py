@@ -1,28 +1,33 @@
 """
-chatbot.py — Shopping chatbot using Qwen2-0.5B-Instruct (local, CPU).
-Understands user intent, queries the search engine, replies conversationally.
+chatbot.py — RAG-based shopping chatbot using Qwen2-0.5B-Instruct.
+
+RAG Flow:
+  1. User sends message
+  2. Search engine retrieves top-K relevant products (the "context")
+  3. LLM receives: system prompt + conversation history + retrieved products + user query
+  4. LLM generates a grounded, conversational response based ONLY on retrieved products
 """
 
 import re
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 
-# ── MODEL ─────────────────────────────────────────────────────────────────────
 MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
 
 _pipe      = None
 _tokenizer = None
 
-SYSTEM_PROMPT = """You are ShopBot, a friendly AI shopping assistant for an eBay product store.
-Your job is to help users find products based on their needs and budget.
+SYSTEM_PROMPT = """You are ShopBot, a friendly AI shopping assistant.
+You help users find products from our eBay store.
 
-Rules:
-- Keep replies SHORT (2-3 sentences max)
-- If the user asks for products, extract: what they want, budget/price range, condition (new/used)
-- Reply naturally and warmly
-- Do NOT make up products — the system will show real products separately
-- If no products found, suggest trying different keywords
-- Always end with a helpful follow-up question or suggestion"""
+IMPORTANT RULES:
+- Answer ONLY based on the products provided in the context
+- Be conversational and helpful, 2-4 sentences
+- Mention specific product names, prices, and conditions from the context
+- If budget is mentioned, highlight products within that budget
+- If no products match, say so honestly and suggest alternatives
+- Never make up products or prices
+- End with a short follow-up question"""
 
 
 def _load():
@@ -33,7 +38,7 @@ def _load():
     _tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
-        torch_dtype=torch.float32,   # CPU — use float32
+        dtype=torch.float32,
         device_map="cpu",
         low_cpu_mem_usage=True,
     )
@@ -41,76 +46,110 @@ def _load():
         "text-generation",
         model=model,
         tokenizer=_tokenizer,
-        max_new_tokens=120,
-        do_sample=False,             # deterministic — faster on CPU
-        temperature=1.0,
-        repetition_penalty=1.1,
+        max_new_tokens=200,
+        do_sample=False,
+        repetition_penalty=1.15,
     )
     print("[Chatbot] Ready.")
 
 
+def _format_products_for_context(products: list) -> str:
+    """Format retrieved products as readable context for the LLM."""
+    if not products:
+        return "No products found."
+    lines = []
+    for i, p in enumerate(products[:5], 1):   # top 5 for context window
+        name    = p.get("product_name", "")[:70]
+        price   = p.get("price", "N/A")
+        cond    = p.get("condition", "")
+        seller  = p.get("seller_name", "")
+        rating  = p.get("seller_feedback_percent", "")
+        lines.append(
+            f"{i}. {name} | Price: {price} | Condition: {cond} | "
+            f"Seller: {seller} {rating}"
+        )
+    return "\n".join(lines)
+
+
 def extract_search_query(user_message: str, history: list) -> str:
-    """
-    Use the LLM to extract a clean search query from the user message.
-    Returns a short keyword string suitable for the search engine.
-    """
+    """Use LLM to extract a clean search query from the user message."""
     _load()
 
-    extract_prompt = f"""Extract a short eBay product search query from this message.
-Return ONLY the search keywords, nothing else. No explanation.
+    # Build context from last user turn if available
+    prev = ""
+    for turn in reversed(history[-4:]):
+        if turn.get("role") == "user":
+            prev = turn.get("content", "")
+            break
+
+    prompt = f"""Extract a short eBay product search query from this message.
+Return ONLY the search keywords, nothing else.
 Examples:
   "I want a red jacket under $50" -> red jacket
   "show me nike sneakers size 10 new" -> nike sneakers size 10 new
-  "something warm for winter" -> warm winter jacket coat
+  "something warm for winter under $100" -> warm winter jacket coat
   "vintage dress good condition" -> vintage dress
+  "women clothing" -> womens clothing dress top blouse
 
+Previous context: {prev}
 Message: {user_message}
 Search query:"""
 
-    messages = [{"role": "user", "content": extract_prompt}]
-    out = _pipe(messages, max_new_tokens=30, do_sample=False)
+    messages = [{"role": "user", "content": prompt}]
+    out = _pipe(messages, max_new_tokens=20, do_sample=False)
     raw = out[0]["generated_text"][-1]["content"].strip()
-    # Clean up — take first line only
     query = raw.splitlines()[0].strip().strip('"').strip("'")
-    return query if query else user_message
+    return query if len(query) > 2 else user_message
 
 
-def chat(user_message: str, history: list, products_found: int) -> str:
+def chat(user_message: str, history: list, products: list) -> str:
     """
-    Generate a conversational reply given the user message and search results count.
-    history: list of {"role": "user"/"assistant", "content": "..."}
+    RAG: Generate a response grounded in the retrieved products.
+    products: list of product dicts from search engine
     """
     _load()
 
-    # Build context about what was found
-    if products_found > 0:
-        product_context = f"[System: Found {products_found} matching products shown below]"
-    else:
-        product_context = "[System: No products found for this query]"
+    # Format products as context
+    product_context = _format_products_for_context(products)
+
+    # Build RAG prompt
+    rag_content = f"""Retrieved products from our store:
+{product_context}
+
+User question: {user_message}
+
+Based ONLY on the products above, give a helpful, conversational response."""
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    # Add last 4 turns of history for context
-    for turn in history[-4:]:
-        messages.append(turn)
+    # Add last 3 turns of history
+    for turn in history[-3:]:
+        messages.append({"role": turn["role"], "content": turn["content"]})
 
-    messages.append({"role": "user", "content": f"{user_message}\n{product_context}"})
+    messages.append({"role": "user", "content": rag_content})
 
-    out = _pipe(messages, max_new_tokens=120, do_sample=False)
+    out = _pipe(messages, max_new_tokens=200, do_sample=False)
     reply = out[0]["generated_text"][-1]["content"].strip()
 
-    # Safety: trim if too long
+    # Clean up — remove any incomplete trailing sentence
     sentences = re.split(r'(?<=[.!?])\s+', reply)
-    return " ".join(sentences[:3])
+    # Keep complete sentences only
+    complete = [s for s in sentences if s.endswith(('.', '!', '?'))]
+    if complete:
+        return " ".join(complete[:4])
+    return reply[:400]
 
 
 def is_product_query(user_message: str) -> bool:
-    """Quick heuristic check — does this message want products?"""
+    """Heuristic: does this message want products?"""
     keywords = [
-        "show", "find", "search", "looking for", "want", "need", "buy",
-        "get me", "recommend", "suggest", "under", "budget", "cheap",
+        "show", "find", "search", "looking", "want", "need", "buy",
+        "get", "recommend", "suggest", "under", "budget", "cheap",
         "affordable", "best", "top", "jacket", "dress", "shoes", "shirt",
         "pants", "bag", "watch", "jewelry", "sneakers", "boots", "coat",
+        "women", "mens", "kids", "baby", "vintage", "clothing", "clothes",
+        "outfit", "wear", "fashion", "style", "size", "color", "brand",
+        "new", "used", "sale", "discount", "price", "cost", "how much",
     ]
     msg = user_message.lower()
     return any(k in msg for k in keywords)
