@@ -17,16 +17,16 @@ MODEL_ID = "Qwen/Qwen2-0.5B-Instruct"
 _pipe      = None
 _tokenizer = None
 
-SYSTEM_PROMPT = """You are ShopBot, a friendly AI shopping assistant.
-You help users find products from our eBay store.
+SYSTEM_PROMPT = """You are ShopBot, a friendly AI shopping assistant for an eBay clothing and accessories store.
 
-IMPORTANT RULES:
-- Answer ONLY based on the products provided in the context
-- Be conversational and helpful, 2-4 sentences
-- Mention specific product names, prices, and conditions from the context
-- If budget is mentioned, highlight products within that budget
-- If no products match, say so honestly and suggest alternatives
-- Never make up products or prices
+RULES:
+- For greetings (hi, hello, hey) → respond warmly and ask what they're looking for
+- For product queries → respond based ONLY on the retrieved products provided
+- For non-product questions → answer helpfully and guide them to search for products
+- Keep replies SHORT: 2-3 sentences max
+- Never say "I'm sorry" for greetings or casual messages
+- Never make up products — only reference what's in the context
+- If products were found, briefly highlight 1-2 of them by name and price
 - End with a short follow-up question"""
 
 
@@ -109,16 +109,24 @@ def chat(user_message: str, history: list, products: list) -> str:
     """
     _load()
 
-    # Format products as context
-    product_context = _format_products_for_context(products)
+    # Detect greeting — don't pass product context for simple greetings
+    greetings = {"hi", "hello", "hey", "hiya", "howdy", "sup", "yo", "good morning", "good evening"}
+    is_greeting = user_message.strip().lower().rstrip("!.,") in greetings
 
-    # Build RAG prompt
-    rag_content = f"""Retrieved products from our store:
+    if is_greeting:
+        rag_content = user_message
+    elif products:
+        product_context = _format_products_for_context(products)
+        rag_content = f"""Retrieved products from our store:
 {product_context}
 
 User question: {user_message}
 
-Based ONLY on the products above, give a helpful, conversational response."""
+Based on the products above, give a helpful conversational response. Mention 1-2 specific products by name and price."""
+    else:
+        rag_content = f"""User question: {user_message}
+
+No products were found for this query. Suggest the user try different keywords or browse categories like Womens Clothing, Mens Shoes, Watches, Jewelry, etc."""
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
@@ -131,17 +139,22 @@ Based ONLY on the products above, give a helpful, conversational response."""
     out = _pipe(messages, max_new_tokens=200, do_sample=False)
     reply = out[0]["generated_text"][-1]["content"].strip()
 
-    # Clean up — remove any incomplete trailing sentence
+    # Keep only complete sentences
     sentences = re.split(r'(?<=[.!?])\s+', reply)
-    # Keep complete sentences only
-    complete = [s for s in sentences if s.endswith(('.', '!', '?'))]
-    if complete:
-        return " ".join(complete[:4])
-    return reply[:400]
+    complete = [s for s in sentences if re.search(r'[.!?]$', s)]
+    return " ".join(complete[:4]) if complete else reply[:400]
 
 
 def is_product_query(user_message: str) -> bool:
     """Heuristic: does this message want products?"""
+    msg = user_message.strip().lower().rstrip("!.,")
+
+    # Pure greetings — never search
+    greetings = {"hi", "hello", "hey", "hiya", "howdy", "sup", "yo",
+                 "good morning", "good evening", "good afternoon", "thanks", "thank you", "bye"}
+    if msg in greetings:
+        return False
+
     keywords = [
         "show", "find", "search", "looking", "want", "need", "buy",
         "get", "recommend", "suggest", "under", "budget", "cheap",
@@ -150,6 +163,6 @@ def is_product_query(user_message: str) -> bool:
         "women", "mens", "kids", "baby", "vintage", "clothing", "clothes",
         "outfit", "wear", "fashion", "style", "size", "color", "brand",
         "new", "used", "sale", "discount", "price", "cost", "how much",
+        "handbag", "purse", "accessory", "accessories", "ring", "necklace",
     ]
-    msg = user_message.lower()
     return any(k in msg for k in keywords)
