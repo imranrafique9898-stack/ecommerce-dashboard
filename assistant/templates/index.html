@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Shopping Assistant</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; }
+
+    header {
+      background: linear-gradient(135deg, #0064d2, #00a0e0);
+      color: white; padding: 20px 30px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header p  { font-size: 0.9rem; opacity: 0.85; }
+
+    .search-bar {
+      background: white; padding: 20px 30px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      display: flex; gap: 10px; align-items: center;
+    }
+    .search-bar input {
+      flex: 1; padding: 12px 16px; font-size: 1rem;
+      border: 2px solid #ddd; border-radius: 8px; outline: none;
+      transition: border 0.2s;
+    }
+    .search-bar input:focus { border-color: #0064d2; }
+    .search-bar button {
+      padding: 12px 22px; font-size: 1rem; border: none;
+      border-radius: 8px; cursor: pointer; font-weight: 600;
+      transition: background 0.2s;
+    }
+    #searchBtn  { background: #0064d2; color: white; }
+    #searchBtn:hover { background: #0052b0; }
+    #voiceBtn   { background: #e8f0fe; color: #0064d2; font-size: 1.3rem; padding: 12px 16px; }
+    #voiceBtn.listening { background: #ff4444; color: white; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+    .summary-bar {
+      background: #e8f4fd; border-left: 4px solid #0064d2;
+      padding: 12px 30px; font-size: 0.95rem; color: #333;
+      display: none;
+    }
+
+    .filters {
+      padding: 12px 30px; display: flex; gap: 10px; flex-wrap: wrap;
+      background: white; border-bottom: 1px solid #eee;
+    }
+    .filters select, .filters input {
+      padding: 7px 12px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 0.88rem; outline: none;
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 18px; padding: 24px 30px;
+    }
+
+    .card {
+      background: white; border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      overflow: hidden; transition: transform 0.2s, box-shadow 0.2s;
+      display: flex; flex-direction: column;
+    }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 6px 20px rgba(0,0,0,0.12); }
+
+    .card-img {
+      width: 100%; height: 200px; object-fit: cover;
+      background: #f5f5f5;
+    }
+    .card-img-placeholder {
+      width: 100%; height: 200px; background: #f0f2f5;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.5rem; color: #ccc;
+    }
+
+    .card-body { padding: 14px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .card-title { font-size: 0.9rem; font-weight: 600; line-height: 1.3;
+                  display: -webkit-box; -webkit-line-clamp: 2;
+                  -webkit-box-orient: vertical; overflow: hidden; }
+    .card-price { font-size: 1.2rem; font-weight: 700; color: #0064d2; }
+    .card-original { font-size: 0.8rem; color: #999; text-decoration: line-through; }
+    .card-condition { font-size: 0.78rem; background: #e8f5e9; color: #2e7d32;
+                      padding: 2px 8px; border-radius: 20px; width: fit-content; }
+    .card-seller { font-size: 0.78rem; color: #666; margin-top: auto; }
+    .card-rating { font-size: 0.78rem; color: #f57c00; font-weight: 600; }
+
+    .card-footer { padding: 10px 14px; border-top: 1px solid #f0f0f0; }
+    .card-footer a {
+      display: block; text-align: center; padding: 8px;
+      background: #0064d2; color: white; border-radius: 6px;
+      text-decoration: none; font-size: 0.85rem; font-weight: 600;
+      transition: background 0.2s;
+    }
+    .card-footer a:hover { background: #0052b0; }
+
+    .loading { text-align: center; padding: 60px; color: #666; font-size: 1.1rem; }
+    .empty   { text-align: center; padding: 60px; color: #999; }
+    .empty span { font-size: 3rem; display: block; margin-bottom: 12px; }
+
+    .status-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 0.75rem; font-weight: 600; margin-left: 6px;
+    }
+    .badge-new  { background: #e8f5e9; color: #2e7d32; }
+    .badge-used { background: #fff3e0; color: #e65100; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🛍️ AI Shopping Assistant</h1>
+    <p>Search thousands of eBay products with natural language</p>
+  </div>
+</header>
+
+<div class="search-bar">
+  <input type="text" id="queryInput" placeholder='Try: "red mens jacket under $50" or "vintage dress new with tags"' />
+  <button id="searchBtn" onclick="doSearch()">Search</button>
+  {% if mic_available %}
+  <button id="voiceBtn" onclick="doVoice()" title="Voice search">🎤</button>
+  {% endif %}
+</div>
+
+<div class="filters">
+  <select id="filterCondition" onchange="doSearch()">
+    <option value="">All Conditions</option>
+    <option value="new">New</option>
+    <option value="used">Used / Pre-owned</option>
+  </select>
+  <select id="filterCategory" onchange="doSearch()">
+    <option value="">All Categories</option>
+    <option>Womens Clothing</option>
+    <option>Mens Clothing</option>
+    <option>Womens Shoes</option>
+    <option>Mens Shoes</option>
+    <option>Womens Accessories</option>
+    <option>Mens Accessories</option>
+    <option>Womens Bags & Handbags</option>
+    <option>Kids Clothing</option>
+    <option>Baby Clothing</option>
+    <option>Vintage Clothing</option>
+    <option>Jewelry</option>
+    <option>Watches</option>
+  </select>
+  <input type="number" id="filterMaxPrice" placeholder="Max price $" style="width:130px" onchange="doSearch()" />
+</div>
+
+<div class="summary-bar" id="summaryBar"></div>
+
+<div id="resultsContainer">
+  <div class="empty"><span>🔍</span>Enter a search query to find products</div>
+</div>
+
+<script>
+  let lastQuery = "";
+
+  document.getElementById("queryInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") doSearch();
+  });
+
+  async function doSearch() {
+    let query = document.getElementById("queryInput").value.trim();
+    const condition = document.getElementById("filterCondition").value;
+    const category  = document.getElementById("filterCategory").value;
+    const maxPrice  = document.getElementById("filterMaxPrice").value;
+
+    if (!query) return;
+
+    // Append filters to query naturally
+    if (condition) query += " " + condition;
+    if (maxPrice)  query += " under $" + maxPrice;
+
+    lastQuery = query;
+    document.getElementById("resultsContainer").innerHTML =
+      '<div class="loading">🔍 Searching for <strong>' + escHtml(query) + '</strong>...</div>';
+
+    try {
+      const res  = await fetch("/search", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({query})
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        showEmpty("Error: " + data.error);
+        return;
+      }
+
+      // Filter by category client-side
+      let results = data.results;
+      if (category) {
+        results = results.filter(r => r.category === category);
+      }
+
+      document.getElementById("summaryBar").style.display = "block";
+      document.getElementById("summaryBar").textContent   = data.summary;
+
+      renderResults(results);
+    } catch(e) {
+      showEmpty("Search failed. Please try again.");
+    }
+  }
+
+  function renderResults(results) {
+    if (!results.length) {
+      showEmpty("No products found. Try a different search.");
+      return;
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "results-grid";
+
+    results.forEach(p => {
+      const condClass = (p.condition||"").toLowerCase().includes("new") ? "badge-new" : "badge-used";
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        ${p.image_url
+          ? `<img class="card-img" src="${escHtml(p.image_url)}" alt="${escHtml(p.product_name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : ""}
+        <div class="card-img-placeholder" ${p.image_url ? 'style="display:none"' : ""}>🛍️</div>
+        <div class="card-body">
+          <div class="card-title">${escHtml(p.product_name)}</div>
+          <div>
+            <span class="card-price">${escHtml(p.price)}</span>
+            ${p.original_price ? `<span class="card-original">${escHtml(p.original_price)}</span>` : ""}
+          </div>
+          ${p.condition ? `<div class="card-condition status-badge ${condClass}">${escHtml(p.condition)}</div>` : ""}
+          <div class="card-seller">
+            👤 ${escHtml(p.seller_name || "Unknown")}
+            ${p.seller_feedback_percent
+              ? `<span class="card-rating">⭐ ${escHtml(p.seller_feedback_percent)}</span>`
+              : ""}
+          </div>
+          <div class="card-seller">📍 ${escHtml(p.seller_location || "")}</div>
+        </div>
+        <div class="card-footer">
+          <a href="${escHtml(p.product_url)}" target="_blank">View on eBay →</a>
+        </div>`;
+      grid.appendChild(card);
+    });
+
+    document.getElementById("resultsContainer").innerHTML = "";
+    document.getElementById("resultsContainer").appendChild(grid);
+  }
+
+  async function doVoice() {
+    const btn = document.getElementById("voiceBtn");
+    btn.classList.add("listening");
+    btn.textContent = "🔴";
+
+    try {
+      const res  = await fetch("/voice", {method: "POST"});
+      const data = await res.json();
+      if (data.text) {
+        document.getElementById("queryInput").value = data.text;
+        doSearch();
+      } else {
+        alert(data.error || "Could not understand. Please try again.");
+      }
+    } catch(e) {
+      alert("Voice input failed.");
+    } finally {
+      btn.classList.remove("listening");
+      btn.textContent = "🎤";
+    }
+  }
+
+  function showEmpty(msg) {
+    document.getElementById("resultsContainer").innerHTML =
+      `<div class="empty"><span>😕</span>${escHtml(msg)}</div>`;
+  }
+
+  function escHtml(str) {
+    return String(str||"").replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                          .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+</script>
+</body>
+</html>
