@@ -194,7 +194,11 @@ CATEGORY_KEYWORDS = {
                                 "sneakers for men", "boots for men"],
     "Womens Shoes"           : ["womens shoes", "women shoes", "womens sneakers", "women sneakers",
                                 "womens boots", "women boots", "womens heels", "womens sandals",
-                                "womens flats", "shoes for women", "ladies shoes", "womens footwear"],
+                                "womens flats", "shoes for women", "ladies shoes", "womens footwear",
+                                "womens loafers", "womens pumps", "womens wedges", "womens mules",
+                                "womens slip on", "womens ankle boots", "womens ballet flats",
+                                "womens platforms", "womens stilettos", "womens oxford",
+                                "heels for women", "boots for women", "sandals for women"],
     "Mens Clothing"          : ["mens clothing", "men clothing", "mens shirt", "mens jacket",
                                 "mens jeans", "mens pants", "mens hoodie", "mens coat",
                                 "mens suit", "mens wear", "clothes for men", "men fashion"],
@@ -346,6 +350,32 @@ def search(query, top_k=12, category_filter=None):
             "product_url"            : p.get("product_url", ""),
             "score"                  : float(hybrid[idx]),
         })
+
+    # Fallback: if category filter gave too few results, relax it
+    if category_filter and len(results) < 3:
+        print(f"  [Search] Too few results for '{category_filter}', relaxing filter...")
+        results = []
+        for idx in ranked_indices:
+            if len(results) >= top_k:
+                break
+            p = _products[idx]
+            if not _passes_filters(p, filters):
+                continue
+            results.append({
+                "item_id"                : p.get("item_id", ""),
+                "product_name"           : p.get("product_name", ""),
+                "category"               : p.get("category", ""),
+                "price"                  : p.get("price", "N/A"),
+                "original_price"         : p.get("original_price", ""),
+                "condition"              : p.get("condition", ""),
+                "seller_name"            : p.get("seller_name", ""),
+                "seller_feedback"        : p.get("seller_feedback", ""),
+                "seller_feedback_percent": p.get("seller_feedback_percent", ""),
+                "seller_location"        : p.get("seller_location", ""),
+                "image_url"              : (p.get("image_urls") or [""])[0],
+                "product_url"            : p.get("product_url", ""),
+                "score"                  : float(hybrid[idx]),
+            })
 
     return results
 
