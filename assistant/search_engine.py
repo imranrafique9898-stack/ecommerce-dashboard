@@ -48,60 +48,120 @@ _ready      = False
 
 def _build_chunk(p):
     """
-    Build ONE structured text chunk per product.
-    Prioritises the most searchable fields:
-    name > category > condition > key specifics > seller info
+    Build ONE structured chunk per product in a clean, logical order:
+    1. Product name
+    2. Product type (shoes, dress, jacket, sneaker...)
+    3. Gender / audience (mens, womens, kids...)
+    4. Price
+    5. Condition
+    6. Key attributes: brand, color, size, material, style
+    7. Seller description (cleaned)
     """
     parts = []
 
+    # 1. Product name
     name = p.get("product_name", "").strip()
     if name:
-        parts.append(name)
+        parts.append(f"product: {name}")
 
+    # 2. Product type — from category or item specifics
+    specs = p.get("item_specifics", {}) or {}
+    ptype = (specs.get("Type") or specs.get("Shoe Type") or
+             specs.get("Clothing Type") or specs.get("Style") or "")
     cat = p.get("category", "").strip()
-    if cat:
-        parts.append(cat)
+    if ptype:
+        parts.append(f"type: {ptype}")
+    elif cat:
+        # Derive type from category name
+        type_map = {
+            "Womens Clothing"       : "clothing",
+            "Mens Clothing"         : "clothing",
+            "Womens Shoes"          : "shoes",
+            "Mens Shoes"            : "shoes",
+            "Womens Bags & Handbags": "bag handbag",
+            "Womens Accessories"    : "accessories",
+            "Mens Accessories"      : "accessories",
+            "Kids Clothing"         : "clothing",
+            "Baby Clothing"         : "clothing",
+            "Vintage Clothing"      : "clothing vintage",
+            "Jewelry"               : "jewelry",
+            "Watches"               : "watch",
+        }
+        parts.append(f"type: {type_map.get(cat, cat.lower())}")
 
-    cond = p.get("condition", "").strip()
-    if cond:
-        parts.append(cond)
+    # 3. Gender / audience
+    gender = (specs.get("Department") or specs.get("Gender") or
+              specs.get("Age Group") or "")
+    if not gender and cat:
+        if "Womens" in cat or "Women" in cat:
+            gender = "womens women"
+        elif "Mens" in cat or "Men" in cat:
+            gender = "mens men"
+        elif "Kids" in cat:
+            gender = "kids children"
+        elif "Baby" in cat:
+            gender = "baby infant"
+    if gender:
+        parts.append(f"for: {gender.lower()}")
 
-    # Key item specifics — most valuable for search
+    # 4. Price
+    price = p.get("price", "").strip()
+    if price:
+        parts.append(f"price: {price}")
+
+    # 5. Condition
+    condition = p.get("condition", "").strip()
+    if condition:
+        # Keep only the first part before colon (e.g. "New with tags: ..." -> "New with tags")
+        condition = condition.split(":")[0].strip()
+        parts.append(f"condition: {condition}")
+
+    # 6. Key attributes — only meaningful search fields, skip logistics
+    skip_keys = {
+        "shipping", "import fees", "delivery", "returns", "estimated total",
+        "item price", "list price", "was", "coupons", "discounts",
+        "country of origin", "customised", "vintage", "release year",
+        "item description from the seller",
+    }
     priority_keys = [
-        "Brand", "Type", "Style", "Color", "Colour", "Size", "Material",
-        "Department", "Gender", "Age Group", "Pattern", "Occasion",
-        "Features", "Shoe Width", "Heel Height", "Closure", "Fabric Type",
+        "Brand", "Color", "Colour", "Size", "Material", "Style",
+        "Fabric Type", "Pattern", "Occasion", "Features", "Fit",
+        "Shoe Width", "Heel Height", "Closure", "Upper Material",
+        "Sole Material", "Lining Material", "Sleeve Length",
+        "Neckline", "Theme", "Product Line", "Model",
     ]
-    specs = p.get("item_specifics", {})
+    # Priority keys first
     for key in priority_keys:
         val = specs.get(key, "")
-        if val:
-            parts.append(f"{key}: {val}")
+        if val and key.lower() not in skip_keys:
+            parts.append(f"{key.lower()}: {val.lower()}")
 
-    # Any remaining specifics not in priority list
+    # Remaining specs (skip logistics/shipping keys)
     for k, v in specs.items():
-        if k not in priority_keys and v and len(str(v)) < 60:
-            parts.append(f"{k}: {v}")
+        if k in priority_keys:
+            continue
+        if any(skip in k.lower() for skip in skip_keys):
+            continue
+        if v and len(str(v)) < 80:
+            parts.append(f"{k.lower()}: {str(v).lower()}")
 
-    # Seller description — clean and truncate to most useful part
+    # 7. Seller description — clean, first 300 chars
     desc = p.get("seller_description", "").strip()
     if desc:
-        # Remove repetitive spec lines already captured above
-        desc_lines = [l.strip() for l in desc.splitlines() if len(l.strip()) > 20]
-        desc_clean = " ".join(desc_lines[:8])  # first 8 meaningful lines
-        if desc_clean:
-            parts.append(desc_clean[:400])  # cap at 400 chars
+        # Remove lines that are just spec repeats or logistics
+        clean_lines = []
+        for line in desc.splitlines():
+            line = line.strip()
+            if len(line) < 15:
+                continue
+            if any(skip in line.lower() for skip in skip_keys):
+                continue
+            clean_lines.append(line)
+        clean_desc = " ".join(clean_lines[:5])
+        if clean_desc:
+            parts.append(f"description: {clean_desc[:300].lower()}")
 
-    # Seller info
-    seller = p.get("seller_name", "").strip()
-    if seller:
-        parts.append(f"Seller: {seller}")
-
-    loc = p.get("seller_location", "").strip()
-    if loc:
-        parts.append(f"Location: {loc}")
-
-    return " | ".join(parts).lower()
+    return " | ".join(parts)
 
 
 # ── INDEX BUILD / LOAD ────────────────────────────────────────────────────────
