@@ -1,431 +1,399 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ShopBot</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Product Shopping Assistant</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #6366f1; --primary-dark: #4f46e5;
+  --secondary: #f43f5e;
+  --bg-light: #f8fafc; --bg-white: #ffffff;
+  --text-dark: #1e293b; --text-muted: #64748b;
+  --border: #e2e8f0;
+  --shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+}
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh; padding: 20px; color: var(--text-dark);
+}
+.container {
+  max-width: 1400px; margin: 0 auto;
+  background: var(--bg-white); border-radius: 24px;
+  box-shadow: var(--shadow-lg); overflow: hidden;
+  display: grid; grid-template-rows: auto 1fr auto;
+  height: calc(100vh - 40px);
+}
+.header {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white; padding: 24px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header h1 { font-size: 28px; font-weight: 700; display: flex; align-items: center; gap: 12px; }
+.header .emoji { font-size: 32px; }
+.stats { display: flex; gap: 24px; font-size: 14px; opacity: 0.9; }
+.stat-item { display: flex; align-items: center; gap: 8px; }
 
-    body {
-      min-height: 100vh;
-      background: linear-gradient(135deg, #2b2dce 0%, #a855f7 100%);
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Segoe UI', sans-serif;
-    }
+.main-content { display: grid; grid-template-columns: 1fr; overflow: hidden; }
 
-    /* ── CHAT WINDOW ── */
-    .chat-window {
-      width: 400px;
-      max-height: 90vh;
-      background: #fff;
-      border-radius: 20px;
-      box-shadow: 0 24px 60px rgba(0,0,0,0.3);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
+.chat-area {
+  display: flex; flex-direction: column;
+  padding: 24px 32px; overflow-y: auto; gap: 16px;
+}
+.message { display: flex; gap: 12px; animation: slideIn 0.3s ease-out; }
+@keyframes slideIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+.message.user { flex-direction: row-reverse; }
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.message.user .avatar { background: linear-gradient(135deg, var(--secondary) 0%, #fb923c 100%); }
+.message.assistant .avatar { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
+.message-content {
+  max-width: 75%; background: var(--bg-light);
+  padding: 16px 20px; border-radius: 16px; line-height: 1.6;
+  display: flex; flex-direction: column;
+}
+.message.user .message-content {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+}
+.message.assistant .message-content { background: var(--bg-light); border: 1px solid var(--border); }
 
-    /* ── HEADER ── */
-    .chat-header {
-      background: linear-gradient(135deg, #7c3aed, #a855f7);
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: white;
-    }
-    .bot-avatar {
-      width: 44px; height: 44px;
-      background: rgba(255,255,255,0.2);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.4rem;
-      flex-shrink: 0;
-    }
-    .bot-info h2 { font-size: 1rem; font-weight: 700; }
-    .bot-status  { font-size: 0.78rem; opacity: 0.9; display: flex; align-items: center; gap: 5px; }
-    .dot { width: 7px; height: 7px; background: #4ade80; border-radius: 50%; }
-    .header-actions { margin-left: auto; display: flex; gap: 10px; opacity: 0.8; cursor: pointer; font-size: 1.1rem; }
+/* Product Grid */
+.products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px; margin-top: 14px; width: 100%;
+}
+.product-card {
+  background: white; border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden;
+  transition: all 0.3s ease; cursor: pointer;
+}
+.product-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.product-image { width: 100%; height: 160px; object-fit: cover; background: var(--bg-light); display: block; }
+.product-info { padding: 14px; }
+.product-name {
+  font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--text-dark);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.product-price { font-size: 18px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+.product-condition { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; }
+.buy-button {
+  width: 100%; padding: 10px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white; border: none; border-radius: 8px;
+  font-weight: 600; cursor: pointer; transition: all 0.3s ease; font-size: 13px;
+  text-decoration: none; display: block; text-align: center;
+}
+.buy-button:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(99,102,241,0.4); }
 
-    /* ── MESSAGES ── */
-    .chat-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      background: #fafafa;
-    }
-    .chat-body::-webkit-scrollbar { width: 4px; }
-    .chat-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+/* Input */
+.input-area {
+  padding: 20px 32px; background: var(--bg-light);
+  border-top: 1px solid var(--border);
+}
+.input-container { display: flex; gap: 10px; max-width: 720px; margin: 0 auto; }
+.input-field {
+  flex: 1; padding: 12px 16px; border: 2px solid var(--border);
+  border-radius: 10px; font-size: 14px; outline: none;
+  transition: all 0.2s ease; font-family: inherit;
+}
+.input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+.send-button {
+  padding: 12px 20px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white; border: none; border-radius: 10px;
+  font-weight: 600; cursor: pointer; transition: all 0.2s ease; font-size: 14px;
+}
+.send-button:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 4px 12px rgba(99,102,241,0.4); }
+.send-button:disabled { opacity: 0.5; cursor: not-allowed; }
+{% if mic_available %}
+.voice-button {
+  padding: 12px 16px;
+  background: #ede9fe; color: var(--primary);
+  border: none; border-radius: 10px; cursor: pointer;
+  font-size: 16px; transition: all 0.2s ease;
+}
+.voice-button.listening { background: #ef4444; color: white; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+{% endif %}
 
-    /* Bot message row */
-    .msg-row { display: flex; gap: 10px; align-items: flex-start; }
-    .msg-row.user { flex-direction: row-reverse; }
+/* Loading */
+.loading { display: flex; gap: 8px; padding: 4px 0; }
+.loading-dot {
+  width: 8px; height: 8px; background: var(--primary);
+  border-radius: 50%; animation: bounce 1.4s infinite ease-in-out;
+}
+.loading-dot:nth-child(1) { animation-delay: -0.32s; }
+.loading-dot:nth-child(2) { animation-delay: -0.16s; }
+@keyframes bounce { 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }
 
-    .msg-avatar {
-      width: 34px; height: 34px;
-      background: linear-gradient(135deg, #7c3aed, #a855f7);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1rem; color: white; flex-shrink: 0;
-    }
+/* Welcome */
+.welcome {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 100%; text-align: center; padding: 32px;
+}
+.welcome-icon { font-size: 80px; margin-bottom: 24px; }
+.welcome h2 { font-size: 32px; margin-bottom: 12px; color: var(--text-dark); }
+.welcome p { font-size: 18px; color: var(--text-muted); margin-bottom: 32px; max-width: 600px; }
+.suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; width: 100%; max-width: 800px; }
+.suggestion-card {
+  padding: 20px; background: var(--bg-light);
+  border: 2px solid var(--border); border-radius: 12px;
+  cursor: pointer; transition: all 0.3s ease;
+}
+.suggestion-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow); }
+.suggestion-icon { font-size: 32px; margin-bottom: 12px; }
+.suggestion-title { font-weight: 600; margin-bottom: 8px; }
+.suggestion-text { font-size: 14px; color: var(--text-muted); }
 
-    .msg-content { display: flex; flex-direction: column; gap: 4px; max-width: 80%; }
-    .msg-label   { font-size: 0.72rem; color: #999; padding-left: 4px; }
-
-    .bubble {
-      padding: 11px 15px;
-      border-radius: 18px;
-      font-size: 0.9rem;
-      line-height: 1.5;
-    }
-    .bubble.bot  {
-      background: white;
-      color: #222;
-      border-top-left-radius: 4px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    .bubble.user {
-      background: linear-gradient(135deg, #7c3aed, #a855f7);
-      color: white;
-      border-top-right-radius: 4px;
-      align-self: flex-end;
-    }
-
-    /* Quick reply chips */
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 44px; }
-    .chip {
-      padding: 7px 16px;
-      border: 1.5px solid #a855f7;
-      border-radius: 20px;
-      font-size: 0.82rem;
-      color: #7c3aed;
-      cursor: pointer;
-      background: white;
-      transition: all 0.2s;
-    }
-    .chip:hover { background: #7c3aed; color: white; }
-
-    /* ── PRODUCT CARDS ── */
-    .products-row {
-      display: flex;
-      gap: 10px;
-      overflow-x: auto;
-      padding: 4px 0 4px 44px;
-      scrollbar-width: thin;
-    }
-    .products-row::-webkit-scrollbar { height: 4px; }
-    .products-row::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
-
-    .product-card {
-      min-width: 160px; max-width: 160px;
-      background: white;
-      border-radius: 14px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-      overflow: hidden;
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      transition: transform 0.2s;
-    }
-    .product-card:hover { transform: translateY(-3px); }
-
-    .product-card img {
-      width: 100%; height: 120px;
-      object-fit: cover; background: #f0f0f0;
-    }
-    .product-card .no-img {
-      width: 100%; height: 120px;
-      background: #f0f2f5;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2rem; color: #ccc;
-    }
-    .product-info { padding: 8px 10px; flex: 1; }
-    .product-name {
-      font-size: 0.75rem; font-weight: 600; color: #222;
-      display: -webkit-box; -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical; overflow: hidden;
-      line-height: 1.3; margin-bottom: 4px;
-    }
-    .product-price { font-size: 0.9rem; font-weight: 700; color: #7c3aed; }
-    .product-cond  { font-size: 0.68rem; color: #888; margin-top: 2px; }
-    .product-rating { font-size: 0.68rem; color: #f59e0b; margin-top: 2px; }
-
-    .buy-btn {
-      display: block;
-      margin: 0 10px 10px;
-      padding: 7px;
-      background: linear-gradient(135deg, #7c3aed, #a855f7);
-      color: white;
-      text-align: center;
-      border-radius: 8px;
-      text-decoration: none;
-      font-size: 0.78rem;
-      font-weight: 700;
-      transition: opacity 0.2s;
-    }
-    .buy-btn:hover { opacity: 0.85; }
-
-    /* ── TYPING INDICATOR ── */
-    .typing { display: flex; gap: 5px; align-items: center; padding: 10px 14px; }
-    .typing span {
-      width: 8px; height: 8px; background: #a855f7;
-      border-radius: 50%; animation: bounce 1.2s infinite;
-    }
-    .typing span:nth-child(2) { animation-delay: 0.2s; }
-    .typing span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
-
-    /* ── INPUT BAR ── */
-    .chat-footer {
-      padding: 12px 16px;
-      border-top: 1px solid #eee;
-      background: white;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    .chat-footer input {
-      flex: 1;
-      border: none;
-      outline: none;
-      font-size: 0.9rem;
-      color: #333;
-      background: transparent;
-    }
-    .chat-footer input::placeholder { color: #bbb; }
-
-    .send-btn, .voice-btn {
-      width: 38px; height: 38px;
-      border: none; border-radius: 50%;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1rem;
-      transition: all 0.2s;
-    }
-    .send-btn  { background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; }
-    .send-btn:hover { opacity: 0.85; }
-    .voice-btn { background: #f3e8ff; color: #7c3aed; }
-    .voice-btn.listening { background: #ef4444; color: white; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
-
-    .footer-brand { font-size: 0.7rem; color: #bbb; text-align: center; padding: 6px; background: white; }
-    .footer-brand a { color: #a855f7; text-decoration: none; font-weight: 600; }
-  </style>
+@media (max-width: 768px) {
+  .container { border-radius: 0; height: 100vh; }
+  body { padding: 0; }
+  .products-grid { grid-template-columns: repeat(2, 1fr); }
+  .message-content { max-width: 90%; }
+  .stats { display: none; }
+}
+</style>
 </head>
 <body>
-
-<div class="chat-window">
+<div class="container">
 
   <!-- Header -->
-  <div class="chat-header">
-    <div class="bot-avatar">🛍️</div>
-    <div class="bot-info">
-      <h2>ShopBot</h2>
-      <div class="bot-status"><span class="dot"></span> Online Now</div>
+  <div class="header">
+    <h1><span class="emoji">🛍️</span>AI Shopping Assistant</h1>
+    <div class="stats">
+      <div class="stat-item"><span>🤖</span><span>RAG Powered</span></div>
+      <div class="stat-item"><span>⚡</span><span>Qwen2 + BGE</span></div>
     </div>
-    <div class="header-actions">⋯</div>
   </div>
 
-  <!-- Messages -->
-  <div class="chat-body" id="chatBody">
-
-    <!-- Welcome message -->
-    <div class="msg-row">
-      <div class="msg-avatar">🛍️</div>
-      <div class="msg-content">
-        <div class="msg-label">ShopBot</div>
-        <div class="bubble bot">
-          Hi! 👋 I'm your AI Shopping Assistant.<br>
-          Ask me anything like:<br>
-          <em>"red mens jacket under $50"</em><br>
-          <em>"vintage dress new with tags"</em>
+  <!-- Chat Area -->
+  <div class="chat-area" id="chatArea">
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">🎁</div>
+      <h2>Find Your Perfect Product</h2>
+      <p>Ask me anything about our products! I'll help you find exactly what you're looking for with intelligent AI search.</p>
+      <div class="suggestions">
+        <div class="suggestion-card" onclick="sendSuggestion('Show me dresses under $100')">
+          <div class="suggestion-icon">👗</div>
+          <div class="suggestion-title">Budget Fashion</div>
+          <div class="suggestion-text">Dresses under $100</div>
+        </div>
+        <div class="suggestion-card" onclick="sendSuggestion('Looking for mens shoes under $50')">
+          <div class="suggestion-icon">👟</div>
+          <div class="suggestion-title">Mens Shoes</div>
+          <div class="suggestion-text">Under $50</div>
+        </div>
+        <div class="suggestion-card" onclick="sendSuggestion('Show me watches under $200')">
+          <div class="suggestion-icon">⌚</div>
+          <div class="suggestion-title">Watches</div>
+          <div class="suggestion-text">Under $200</div>
+        </div>
+        <div class="suggestion-card" onclick="sendSuggestion('Show me handbags and purses')">
+          <div class="suggestion-icon">👜</div>
+          <div class="suggestion-title">Handbags</div>
+          <div class="suggestion-text">All styles</div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Quick suggestion chips -->
-    <div class="chips">
-      <div class="chip" onclick="sendChip(this)">👗 Womens Dresses</div>
-      <div class="chip" onclick="sendChip(this)">👟 Mens Sneakers</div>
-      <div class="chip" onclick="sendChip(this)">👜 Handbags</div>
-      <div class="chip" onclick="sendChip(this)">⌚ Watches</div>
+  <!-- Input Area -->
+  <div class="input-area">
+    <div class="input-container">
+      <input type="text" class="input-field" id="userInput"
+        placeholder="Ask me about products... (e.g., 'Show me red jacket under $50')"
+        onkeypress="handleKeyPress(event)">
+      {% if mic_available %}
+      <button class="voice-button" id="voiceBtn" onclick="doVoice()" title="Voice search">🎤</button>
+      {% endif %}
+      <button class="send-button" id="sendButton" onclick="sendMessage()">Send 🚀</button>
     </div>
-
   </div>
 
-  <!-- Input -->
-  <div class="chat-footer">
-    <input type="text" id="queryInput" placeholder="Reply to ShopBot..." />
-    {% if mic_available %}
-    <button class="voice-btn" id="voiceBtn" onclick="doVoice()" title="Voice search">🎤</button>
-    {% endif %}
-    <button class="send-btn" onclick="doSearch()">➤</button>
-  </div>
-
-  <div class="footer-brand">Powered by ⚡ <a href="#">ShopBot AI</a></div>
 </div>
 
 <script>
-  const chatBody = document.getElementById("chatBody");
+  let isProcessing = false;
+  let chatHistory  = [];
 
-  document.getElementById("queryInput").addEventListener("keydown", e => {
-    if (e.key === "Enter") doSearch();
-  });
-
-  function sendChip(el) {
-    document.getElementById("queryInput").value = el.textContent.replace(/^[^\w]+/, "").trim();
-    doSearch();
+  // ── HELPERS ──────────────────────────────────────────────────────────────
+  function escHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = String(text || '');
+    return d.innerHTML;
   }
 
-  function scrollBottom() {
-    chatBody.scrollTop = chatBody.scrollHeight;
+  function hideWelcome() {
+    const w = document.getElementById('welcome');
+    if (w) w.style.display = 'none';
   }
 
-  function addUserBubble(text) {
-    const row = document.createElement("div");
-    row.className = "msg-row user";
-    row.innerHTML = `<div class="msg-content"><div class="bubble user">${esc(text)}</div></div>`;
-    chatBody.appendChild(row);
-    scrollBottom();
+  function scrollToBottom() {
+    const c = document.getElementById('chatArea');
+    c.scrollTop = c.scrollHeight;
   }
 
-  function addBotBubble(html) {
-    const row = document.createElement("div");
-    row.className = "msg-row";
-    row.innerHTML = `
-      <div class="msg-avatar">🛍️</div>
-      <div class="msg-content">
-        <div class="msg-label">ShopBot</div>
-        <div class="bubble bot">${html}</div>
-      </div>`;
-    chatBody.appendChild(row);
-    scrollBottom();
-    return row;
+  // ── MESSAGE BUILDERS ─────────────────────────────────────────────────────
+  function addUserMessage(text) {
+    hideWelcome();
+    const chatArea = document.getElementById('chatArea');
+    const div = document.createElement('div');
+    div.className = 'message user';
+    div.innerHTML = `<div class="avatar">👤</div>
+      <div class="message-content">${escHtml(text)}</div>`;
+    chatArea.appendChild(div);
+    scrollToBottom();
   }
 
-  function addTyping() {
-    const row = document.createElement("div");
-    row.className = "msg-row";
-    row.id = "typingRow";
-    row.innerHTML = `
-      <div class="msg-avatar">🛍️</div>
-      <div class="msg-content">
-        <div class="bubble bot" style="padding:10px 14px">
-          <div class="typing"><span></span><span></span><span></span></div>
+  function addLoadingMessage() {
+    hideWelcome();
+    const chatArea = document.getElementById('chatArea');
+    const div = document.createElement('div');
+    div.className = 'message assistant';
+    div.id = 'loadingMsg';
+    div.innerHTML = `<div class="avatar">🤖</div>
+      <div class="message-content">
+        <div class="loading">
+          <div class="loading-dot"></div>
+          <div class="loading-dot"></div>
+          <div class="loading-dot"></div>
         </div>
       </div>`;
-    chatBody.appendChild(row);
-    scrollBottom();
+    chatArea.appendChild(div);
+    scrollToBottom();
   }
 
-  function removeTyping() {
-    const t = document.getElementById("typingRow");
-    if (t) t.remove();
+  function removeLoading() {
+    const l = document.getElementById('loadingMsg');
+    if (l) l.remove();
   }
 
-  function addProducts(results) {
-    if (!results || !results.length) return;
-    const row = document.createElement("div");
-    row.className = "products-row";
-    results.forEach(p => {
-      const card = document.createElement("div");
-      card.className = "product-card";
-      const imgHtml = p.image_url
-        ? `<img src="${p.image_url}" alt="${esc(p.product_name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-        : "";
-      const noImg = `<div class="no-img" ${p.image_url ? 'style="display:none"' : ""}>🛍️</div>`;
-      const rating = p.seller_feedback_percent
-        ? `<div class="product-rating">⭐ ${esc(p.seller_feedback_percent)}</div>` : "";
-      card.innerHTML = `
-        ${imgHtml}
-        ${noImg}
-        <div class="product-info">
-          <div class="product-name">${esc(p.product_name)}</div>
-          <div class="product-price">${esc(p.price)}</div>
-          <div class="product-cond">${esc(p.condition)}</div>
-          ${rating}
-        </div>
-        <a class="buy-btn" href="${p.product_url}" target="_blank" rel="noopener">🛒 Shop Now</a>`;
-      row.appendChild(card);
-    });
-    chatBody.appendChild(row);
-    scrollBottom();
+  function addBotMessage(replyText, products) {
+    const chatArea = document.getElementById('chatArea');
+    const div = document.createElement('div');
+    div.className = 'message assistant';
+
+    // Build product cards HTML
+    let cardsHtml = '';
+    if (products && products.length > 0) {
+      cardsHtml = '<div class="products-grid">';
+      products.forEach(p => {
+        const imgSrc = p.image_url || '';
+        const imgTag = imgSrc
+          ? `<img src="${imgSrc}" alt="${escHtml(p.product_name)}" class="product-image"
+               onerror="this.style.display='none'">`
+          : `<div class="product-image" style="display:flex;align-items:center;justify-content:center;font-size:3rem;color:#ccc">🛍️</div>`;
+        cardsHtml += `
+          <div class="product-card">
+            ${imgTag}
+            <div class="product-info">
+              <div class="product-name">${escHtml(p.product_name)}</div>
+              <div class="product-price">${escHtml(p.price)}</div>
+              <div class="product-condition">${escHtml(p.condition || '')}</div>
+              <a class="buy-button" href="${p.product_url}" target="_blank" rel="noopener">
+                🛒 Shop Now
+              </a>
+            </div>
+          </div>`;
+      });
+      cardsHtml += '</div>';
+    }
+
+    div.innerHTML = `<div class="avatar">🤖</div>
+      <div class="message-content">
+        <div>${escHtml(replyText)}</div>
+        ${cardsHtml}
+      </div>`;
+    chatArea.appendChild(div);
+    scrollToBottom();
   }
 
-  let chatHistory = [];
+  // ── SEND MESSAGE ─────────────────────────────────────────────────────────
+  async function sendMessage() {
+    const input   = document.getElementById('userInput');
+    const message = input.value.trim();
+    if (!message || isProcessing) return;
 
-  async function doSearch() {
-    const input = document.getElementById("queryInput");
-    const query = input.value.trim();
-    if (!query) return;
+    isProcessing = true;
+    document.getElementById('sendButton').disabled = true;
+    input.value = '';
 
-    input.value = "";
-    addUserBubble(query);
-    addTyping();
-
-    chatHistory.push({role: "user", content: query});
+    addUserMessage(message);
+    addLoadingMessage();
+    chatHistory.push({ role: 'user', content: message });
 
     try {
-      const res  = await fetch("/chat", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({message: query, history: chatHistory.slice(-6)})
+      const res  = await fetch('/chat', {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({ message, history: chatHistory.slice(-6) })
       });
       const data = await res.json();
-      removeTyping();
+      removeLoading();
 
       if (data.error) {
-        addBotBubble("Sorry, something went wrong. Please try again.");
+        addBotMessage('Sorry, something went wrong. Please try again.', []);
         return;
       }
 
-      addBotBubble(esc(data.reply));
-      chatHistory.push({role: "assistant", content: data.reply});
+      addBotMessage(data.reply, data.products || []);
+      chatHistory.push({ role: 'assistant', content: data.reply });
 
-      console.log("Products received:", data.products ? data.products.length : 0);
-      if (data.products && data.products.length > 0) {
-        addProducts(data.products);
-      }
-
-    } catch(e) {
-      removeTyping();
-      addBotBubble("Connection error. Please try again.");
+    } catch (e) {
+      removeLoading();
+      addBotMessage('Connection error. Make sure the server is running.', []);
+    } finally {
+      isProcessing = false;
+      document.getElementById('sendButton').disabled = false;
+      input.focus();
     }
   }
 
+  // ── VOICE ────────────────────────────────────────────────────────────────
   async function doVoice() {
-    const btn = document.getElementById("voiceBtn");
+    const btn = document.getElementById('voiceBtn');
     if (!btn) return;
-    btn.classList.add("listening");
-    btn.textContent = "🔴";
-    addBotBubble("🎤 Listening... speak now!");
-
+    btn.classList.add('listening');
+    btn.textContent = '🔴';
     try {
-      const res  = await fetch("/voice", {method: "POST"});
+      const res  = await fetch('/voice', { method: 'POST' });
       const data = await res.json();
       if (data.text) {
-        document.getElementById("queryInput").value = data.text;
-        doSearch();
+        document.getElementById('userInput').value = data.text;
+        sendMessage();
       } else {
-        addBotBubble("Sorry, I couldn't hear that. Please try again. 🎤");
+        alert(data.error || "Couldn't hear that. Please try again.");
       }
-    } catch(e) {
-      addBotBubble("Voice input failed. Please type your query.");
+    } catch (e) {
+      alert('Voice input failed.');
     } finally {
-      btn.classList.remove("listening");
-      btn.textContent = "🎤";
+      btn.classList.remove('listening');
+      btn.textContent = '🎤';
     }
   }
 
-  function esc(str) {
-    return String(str||"")
-      .replace(/&/g,"&amp;").replace(/</g,"&lt;")
-      .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  // ── UTILS ────────────────────────────────────────────────────────────────
+  function sendSuggestion(text) {
+    document.getElementById('userInput').value = text;
+    sendMessage();
   }
+
+  function handleKeyPress(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+
+  window.addEventListener('load', () => document.getElementById('userInput').focus());
 </script>
 </body>
 </html>
