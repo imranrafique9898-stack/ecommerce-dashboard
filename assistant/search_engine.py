@@ -185,7 +185,53 @@ def _load():
     print("[Search Engine] Ready.\n")
 
 
-# ── FILTERS ───────────────────────────────────────────────────────────────────
+# ── CATEGORY DETECTION ───────────────────────────────────────────────────────
+
+CATEGORY_KEYWORDS = {
+    "Mens Shoes"             : ["mens shoes", "men shoes", "mens sneakers", "men sneakers",
+                                "mens boots", "men boots", "mens loafers", "mens sandals",
+                                "mens trainers", "mens footwear", "shoes for men",
+                                "sneakers for men", "boots for men"],
+    "Womens Shoes"           : ["womens shoes", "women shoes", "womens sneakers", "women sneakers",
+                                "womens boots", "women boots", "womens heels", "womens sandals",
+                                "womens flats", "shoes for women", "ladies shoes", "womens footwear"],
+    "Mens Clothing"          : ["mens clothing", "men clothing", "mens shirt", "mens jacket",
+                                "mens jeans", "mens pants", "mens hoodie", "mens coat",
+                                "mens suit", "mens wear", "clothes for men", "men fashion"],
+    "Womens Clothing"        : ["womens clothing", "women clothing", "womens dress", "women dress",
+                                "womens top", "womens blouse", "womens skirt", "womens jeans",
+                                "womens jacket", "ladies clothing", "women fashion", "dress"],
+    "Womens Bags & Handbags" : ["handbag", "handbags", "purse", "womens bag", "tote bag",
+                                "shoulder bag", "crossbody", "clutch", "womens purse"],
+    "Jewelry"                : ["jewelry", "jewellery", "necklace", "ring", "earrings",
+                                "bracelet", "pendant", "gold chain", "silver ring"],
+    "Watches"                : ["watch", "watches", "wristwatch", "smartwatch", "timepiece"],
+    "Kids Clothing"          : ["kids clothing", "kids clothes", "boys clothing", "girls clothing",
+                                "children clothing", "kids wear", "boys shirt", "girls dress"],
+    "Baby Clothing"          : ["baby clothing", "baby clothes", "baby outfit", "newborn",
+                                "infant clothes", "baby romper", "baby onesie"],
+    "Vintage Clothing"       : ["vintage clothing", "vintage dress", "vintage jacket",
+                                "retro clothing", "vintage wear", "vintage fashion"],
+    "Mens Accessories"       : ["mens accessories", "mens belt", "mens wallet", "mens tie",
+                                "mens hat", "mens scarf", "cufflinks"],
+    "Womens Accessories"     : ["womens accessories", "womens scarf", "womens belt",
+                                "womens hat", "womens gloves", "hair accessories"],
+}
+
+def detect_category(query: str) -> str | None:
+    """Detect the most likely category from the query. Returns category name or None."""
+    q = query.lower().strip()
+    best_cat   = None
+    best_score = 0
+    for cat, keywords in CATEGORY_KEYWORDS.items():
+        for kw in keywords:
+            if kw in q:
+                # Longer keyword match = more specific = higher score
+                score = len(kw)
+                if score > best_score:
+                    best_score = score
+                    best_cat   = cat
+    return best_cat
 
 def _parse_filters(query):
     filters = {}
@@ -239,11 +285,18 @@ def _passes_filters(product, filters):
 def search(query, top_k=12, category_filter=None):
     """
     Hybrid BM25 + Semantic search.
+    Auto-detects category from query if not explicitly provided.
     Returns list of product dicts ranked by relevance.
     """
     _load()
 
     filters = _parse_filters(query)
+
+    # Auto-detect category from query if not explicitly passed
+    if not category_filter:
+        category_filter = detect_category(query)
+        if category_filter:
+            print(f"  [Search] Auto-detected category: {category_filter}")
 
     # ── BM25 scores ──────────────────────────────────────────────────────────
     tokens    = query.lower().split()

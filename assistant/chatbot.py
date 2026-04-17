@@ -75,23 +75,16 @@ def extract_search_query(user_message: str, history: list) -> str:
     """Use LLM to extract a clean search query from the user message."""
     _load()
 
-    # Build context from last user turn if available
-    prev = ""
-    for turn in reversed(history[-4:]):
-        if turn.get("role") == "user":
-            prev = turn.get("content", "")
-            break
-
     prompt = f"""Extract a short eBay product search query from this message.
 Return ONLY the search keywords, nothing else.
 Examples:
   "I want a red jacket under $50" -> red jacket
-  "show me nike sneakers size 10 new" -> nike sneakers size 10 new
-  "something warm for winter under $100" -> warm winter jacket coat
+  "show me nike sneakers size 10 new" -> nike sneakers size 10
+  "something warm for winter under $100" -> warm winter jacket
   "vintage dress good condition" -> vintage dress
-  "women clothing" -> womens clothing dress top blouse
+  "show me mens shoes" -> mens shoes
+  "women clothing" -> womens clothing
 
-Previous context: {prev}
 Message: {user_message}
 Search query:"""
 
