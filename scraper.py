@@ -40,7 +40,19 @@ def build_driver():
     )
     options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
     options.add_experimental_option("useAutomationExtension", False)
-    driver = webdriver.Chrome(options=options)
+
+    # EC2 Ubuntu: use system chromium
+    import platform
+    if platform.system() == "Linux":
+        options.binary_location = "/usr/bin/chromium-browser"
+        from selenium.webdriver.chrome.service import Service
+        driver = webdriver.Chrome(
+            service=Service("/usr/bin/chromedriver"),
+            options=options
+        )
+    else:
+        driver = webdriver.Chrome(options=options)
+
     driver.set_page_load_timeout(CONFIG["page_timeout"])
     return driver
 
