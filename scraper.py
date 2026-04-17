@@ -340,19 +340,33 @@ def scrape_category(driver, cat_name, cat_val, scraped_ids, progress):
             for kw in keywords
         ]
 
-    new_count = 0
+    target     = CONFIG.get("target_per_cat", 1000)
+    new_count  = 0
     completed_kws = progress.get("completed_keywords", [])
 
+    # Count already scraped for this category
+    existing_data = load_data()
+    cat_count = sum(1 for p in existing_data if p.get("category") == cat_name)
+    print(f"  Already have: {cat_count} / {target} target")
+
     for kw_label, base_url in targets:
+        # Stop if target reached
+        if cat_count + new_count >= target:
+            print(f"\n  ✓ Target {target} reached for '{cat_name}'")
+            break
+
         kw_key = f"{cat_name}::{kw_label}"
         if kw_key in completed_kws:
             print(f"\n  ⊘ Skip keyword (done): {kw_label}")
             continue
 
-        print(f"\n  Keyword: '{kw_label}'")
+        print(f"\n  Keyword: '{kw_label}'  [{cat_count + new_count}/{target}]")
         resume_pg = progress.get("current_page", 1) if kw_key == progress.get("current_keyword") else 1
 
         for page_num in range(resume_pg, CONFIG["max_pages"] + 1):
+            if cat_count + new_count >= target:
+                break
+
             sep = "&" if "?" in base_url else "?"
             url = (f"{base_url}{sep}_pgn={page_num}" if is_custom
                    else f"{base_url}&_pgn={page_num}&_ipg={CONFIG['items_per_page']}")
@@ -364,11 +378,15 @@ def scrape_category(driver, cat_name, cat_val, scraped_ids, progress):
                 break
 
             item_urls = get_item_urls(html)
-            print(f"    Found {len(item_urls)} items")
+            print(f"    Found {len(item_urls)} items  [{cat_count + new_count}/{target}]")
             if not item_urls:
                 break
 
             for idx, item_url in enumerate(item_urls, 1):
+                if cat_count + new_count >= target:
+                    print(f"    ✓ Target reached!")
+                    break
+
                 m = re.search(r'/itm/(\d+)', item_url)
                 item_id = m.group(1) if m else ""
 
@@ -420,6 +438,7 @@ def scrape_category(driver, cat_name, cat_val, scraped_ids, progress):
         progress.update({"completed_keywords": completed_kws, "current_page": 1})
         save_progress(progress)
 
+    print(f"\n  Category '{cat_name}' done: {new_count} new items scraped")
     return new_count
 
 
